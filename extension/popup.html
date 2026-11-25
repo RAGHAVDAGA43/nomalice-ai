@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NoMalice AI Scam Shield</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo-area">
+        <span class="shield-icon">🛡️</span>
+        <h1>NoMalice AI</h1>
+      </div>
+      <span class="badge-subtitle">Scam Shield</span>
+    </header>
+
+    <div class="field-group">
+      <label for="page-url">Target URL</label>
+      <input type="text" id="page-url" placeholder="https://example.com" spellcheck="false">
+    </div>
+
+    <div class="field-group">
+      <div class="label-row">
+        <label for="scan-text">Text to Analyze</label>
+        <div class="source-toggle">
+          <button type="button" id="btn-source-selection" class="toggle-btn active" title="Use selected text from page">Selected</button>
+          <button type="button" id="btn-source-page" class="toggle-btn" title="Use visible text from current page">Page Text</button>
+        </div>
+      </div>
+      <textarea id="scan-text" rows="6" placeholder="Highlight text on the page or paste text here to scan..."></textarea>
+      <div class="char-count" id="char-count">0 characters</div>
+    </div>
+
+    <button type="button" id="btn-scan" class="btn-primary">
+      <span class="btn-text">Scan Now</span>
+      <span class="spinner" id="btn-spinner" hidden></span>
+    </button>
+
+    <div id="status-message" class="status-box" hidden></div>
+
+    <div id="results-card" class="results-card" hidden>
+      <div class="results-header">
+        <div>
+          <span class="results-label">Risk Assessment</span>
+          <div class="category-name" id="res-category">Unknown Category</div>
+        </div>
+        <div class="risk-pill" id="res-risk-pill">
+          <span id="res-risk-level">Safe</span>
+          <span class="risk-score" id="res-risk-score">0/100</span>
+        </div>
+      </div>
+
+      <div class="results-section" id="res-primary-red-flag-container">
+        <h3>Primary Red Flag</h3>
+        <p id="res-primary-red-flag" class="highlight-flag"></p>
+      </div>
+
+      <div class="results-section">
+        <h3>Explanation</h3>
+        <p id="res-explanation"></p>
+      </div>
+
+      <div class="results-section" id="res-red-flags-container">
+        <h3>Red Flags Detected</h3>
+        <ul id="res-red-flags-list" class="tag-list"></ul>
+      </div>
+
+      <div class="results-section" id="res-next-steps-container">
+        <h3>Recommended Next Steps</h3>
+        <ol id="res-next-steps-list" class="steps-list"></ol>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js" defer></script>
+</body>
+</html>

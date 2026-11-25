@@ -1,0 +1,13 @@
+{
+  "safari_notes": {
+    "manifest_version": 3,
+    "minimum_safari_version": "15.4",
+    "recommended_bundle_id": "com.nomalice.shield",
+    "required_entitlements": [
+      "com.apple.security.app-sandbox",
+      "com.apple.security.network.client"
+    ],
+    "packager_command_template": "xcrun safari-web-extension-packager . --app-name \"NoMalice AI Scam Shield\" --bundle-identifier com.nomalice.shield --macos-only",
+    "notes": "Manifest V3 with 'action', 'scripting', 'activeTab', and 'host_permissions' is fully compatible with Safari 15.4 and later on macOS Monterey, Ventura, Sonoma, and Sequoia."
+  }
+}
