@@ -13,63 +13,171 @@
         <span class="shield-icon">🛡️</span>
         <h1>NoMalice AI</h1>
       </div>
-      <span class="badge-subtitle">Scam Shield</span>
+      <div class="header-right">
+        <button type="button" class="btn-icon-header" id="btn-toggle-settings" title="Feature Toggles & Settings">⚙️</button>
+      </div>
     </header>
 
-    <div class="field-group">
-      <label for="page-url">Target URL</label>
-      <input type="text" id="page-url" placeholder="https://example.com" spellcheck="false">
+    <!-- Navigation Tabs for Extension Capabilities -->
+    <div class="ext-nav-tabs">
+      <button type="button" class="nav-tab-btn active" id="tab-threat" data-target="view-threat">Scam Shield</button>
+      <button type="button" class="nav-tab-btn" id="tab-command" data-target="view-command">CLI Explainer</button>
+      <button type="button" class="nav-tab-btn" id="tab-workflow" data-target="view-workflow">Workflow Audit</button>
     </div>
 
-    <div class="field-group">
-      <div class="label-row">
-        <label for="scan-text">Text to Analyze</label>
-        <div class="source-toggle">
-          <button type="button" id="btn-source-selection" class="toggle-btn active" title="Use selected text from page">Selected</button>
-          <button type="button" id="btn-source-page" class="toggle-btn" title="Use visible text from current page">Page Text</button>
-        </div>
+    <!-- Feature Toggles Collapsible Card -->
+    <div id="settings-card" class="settings-card" hidden>
+      <div class="settings-header">
+        <span class="settings-title">Extension Settings & Toggles</span>
       </div>
-      <textarea id="scan-text" rows="6" placeholder="Highlight text on the page or paste text here to scan..."></textarea>
-      <div class="char-count" id="char-count">0 characters</div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <strong>Static Command Explainer</strong>
+          <span>Inspect commands & enable selection right-click menu</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-cmd-explainer" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <strong>Workflow Permission Audit</strong>
+          <span>Inspect automation scopes & data logs</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-wf-transparency" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
-    <button type="button" id="btn-scan" class="btn-primary">
-      <span class="btn-text">Scan Now</span>
-      <span class="spinner" id="btn-spinner" hidden></span>
-    </button>
+    <!-- VIEW 1: Threat Analyzer -->
+    <div id="view-threat" class="ext-view active">
+      <div class="field-group">
+        <label for="page-url">Page / Link URL <span class="opt-label">(optional if text provided)</span></label>
+        <input type="text" id="page-url" placeholder="https://example.com, domain, or short link" spellcheck="false">
+      </div>
 
-    <div id="status-message" class="status-box" hidden></div>
-
-    <div id="results-card" class="results-card" hidden>
-      <div class="results-header">
-        <div>
-          <span class="results-label">Risk Assessment</span>
-          <div class="category-name" id="res-category">Unknown Category</div>
+      <div class="field-group">
+        <div class="label-row">
+          <label for="scan-text">Suspicious Text <span class="opt-label">(optional if URL provided)</span></label>
+          <div class="source-toggle">
+            <button type="button" id="btn-source-selection" class="toggle-btn active" title="Use selected text from page">Selected</button>
+            <button type="button" id="btn-source-page" class="toggle-btn" title="Use visible text from current page">Page Text</button>
+          </div>
         </div>
-        <div class="risk-pill" id="res-risk-pill">
-          <span id="res-risk-level">Safe</span>
-          <span class="risk-score" id="res-risk-score">0/100</span>
+        <textarea id="scan-text" rows="5" placeholder="Highlight text on the page or paste text here to scan..."></textarea>
+        <div class="char-count" id="char-count">0 characters</div>
+      </div>
+
+      <button type="button" id="btn-scan" class="btn-primary">
+        <span class="btn-text">Scan Threat</span>
+        <span class="spinner" id="btn-spinner" hidden></span>
+      </button>
+
+      <div id="status-message" class="status-box" hidden></div>
+
+      <div id="results-card" class="results-card" hidden>
+        <div class="results-header">
+          <div>
+            <span class="results-label">Risk Assessment</span>
+            <div class="category-name" id="res-category">Unknown Category</div>
+          </div>
+          <div class="risk-pill" id="res-risk-pill">
+            <span id="res-risk-level">Safe</span>
+            <span class="risk-score" id="res-risk-score">0/100</span>
+          </div>
+        </div>
+
+        <div class="results-section" id="res-primary-red-flag-container">
+          <h3>Primary Red Flag</h3>
+          <p id="res-primary-red-flag" class="highlight-flag"></p>
+        </div>
+
+        <div class="results-section">
+          <h3>Explanation</h3>
+          <p id="res-explanation"></p>
+        </div>
+
+        <div class="results-section" id="res-red-flags-container">
+          <h3>Red Flags Detected</h3>
+          <ul id="res-red-flags-list" class="tag-list"></ul>
+        </div>
+
+        <div class="results-section" id="res-next-steps-container">
+          <h3>Recommended Next Steps</h3>
+          <ol id="res-next-steps-list" class="steps-list"></ol>
         </div>
       </div>
+    </div>
 
-      <div class="results-section" id="res-primary-red-flag-container">
-        <h3>Primary Red Flag</h3>
-        <p id="res-primary-red-flag" class="highlight-flag"></p>
+    <!-- VIEW 2: Static Command Explainer -->
+    <div id="view-command" class="ext-view" hidden>
+      <div id="cmd-disabled-msg" class="feature-disabled-banner" hidden>
+        Command Explainer is currently toggled OFF in Extension Settings.
       </div>
+      <div id="cmd-view-content">
+        <div class="field-group">
+          <label for="ext-cmd-input">Terminal / Shell Command</label>
+          <textarea id="ext-cmd-input" rows="3" placeholder="Paste command to inspect statically... e.g. curl -fsSL https://get.docker.com | sudo sh"></textarea>
+        </div>
+        <div class="btn-row">
+          <button type="button" id="btn-ext-explain" class="btn-primary">
+            <span>⚡ Explain Command</span>
+          </button>
+          <button type="button" id="btn-ext-cmd-sample" class="btn-secondary" title="Load sample piped command">
+            <span>Preset</span>
+          </button>
+        </div>
 
-      <div class="results-section">
-        <h3>Explanation</h3>
-        <p id="res-explanation"></p>
+        <div id="ext-cmd-results" class="ext-sub-card" hidden>
+          <div class="ext-card-header">
+            <span class="results-label">Static CLI Inspection</span>
+            <span class="risk-pill" id="ext-cmd-risk">Safe</span>
+          </div>
+          <div id="ext-cmd-blindspot" class="ext-blindspot-box" hidden>
+            ⚠️ <strong>Blind-Spot:</strong> Remote payload piped directly to shell interpreter cannot be statically verified beforehand.
+          </div>
+          <div id="ext-cmd-warnings" class="ext-warnings-list" hidden></div>
+          <div id="ext-cmd-steps" class="ext-steps-list"></div>
+        </div>
       </div>
+    </div>
 
-      <div class="results-section" id="res-red-flags-container">
-        <h3>Red Flags Detected</h3>
-        <ul id="res-red-flags-list" class="tag-list"></ul>
+    <!-- VIEW 3: Workflow Permission & Log Transparency -->
+    <div id="view-workflow" class="ext-view" hidden>
+      <div id="wf-disabled-msg" class="feature-disabled-banner" hidden>
+        Workflow Transparency is currently toggled OFF in Extension Settings.
       </div>
+      <div id="wf-view-content">
+        <div class="field-group">
+          <label for="ext-wf-apps">Connected Apps in Workflow</label>
+          <input type="text" id="ext-wf-apps" placeholder="e.g. Webhook, Gmail, Google Sheets, Slack" value="Webhook, Make.com, Google Sheets">
+        </div>
+        <div class="btn-row">
+          <button type="button" id="btn-ext-audit-wf" class="btn-primary">
+            <span>🔍 Audit Transparency</span>
+          </button>
+          <button type="button" id="btn-ext-wf-sample" class="btn-secondary" title="Load Email preset">
+            <span>Preset</span>
+          </button>
+        </div>
 
-      <div class="results-section" id="res-next-steps-container">
-        <h3>Recommended Next Steps</h3>
-        <ol id="res-next-steps-list" class="steps-list"></ol>
+        <div id="ext-wf-results" class="ext-sub-card" hidden>
+          <div class="ext-wf-stage">
+            <div class="ext-wf-stage-title">1. Before Run (Permissions)</div>
+            <div id="ext-wf-before-list" class="ext-wf-list"></div>
+          </div>
+          <div class="ext-wf-stage">
+            <div class="ext-wf-stage-title">2. During Run (Silent Auth)</div>
+            <p class="ext-wf-text">Executes in background via pre-approved OAuth tokens without interactive popups.</p>
+          </div>
+          <div class="ext-wf-stage">
+            <div class="ext-wf-stage-title">3. After Run (Run History Logs)</div>
+            <p class="ext-wf-text">Request & response payloads stored in platform run logs for 30–90 days. Avoid unredacted PII.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>

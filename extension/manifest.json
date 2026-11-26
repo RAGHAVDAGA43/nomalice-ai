@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
   "name": "NoMalice AI Scam Shield",
-  "version": "1.0.0",
-  "description": "Scan selected or current webpage text for scams and phishing using NoMalice AI.",
+  "version": "1.1.0",
+  "description": "Scan selected or current webpage text & URLs for scams, inspect shell commands statically, and audit workflow permissions.",
   "action": {
     "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://hook.eu1.make.com/*"

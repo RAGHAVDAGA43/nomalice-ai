@@ -270,11 +270,11 @@
 
           <div class="form-field">
             <div class="field-meta">
-              <label for="input-text">Suspicious Content / Message <span class="req">*</span></label>
+              <label for="input-text">Suspicious Text <span class="opt">(optional if URL provided)</span></label>
               <div class="char-counter" id="char-counter">0 characters</div>
             </div>
             <div class="input-wrapper">
-              <textarea id="input-text" rows="7" placeholder="Paste suspicious email, SMS, crypto DM, banking warning, invoice, or webpage text here... (Ctrl+Enter or Cmd+Enter to analyze)" ></textarea>
+              <textarea id="input-text" rows="7" placeholder="Paste suspicious email, SMS, crypto DM, banking warning, invoice, or webpage text here... (Ctrl+Enter or Cmd+Enter to analyze)"></textarea>
               <div class="scan-laser" id="scan-laser" hidden></div>
             </div>
             <div class="shortcut-tip">
@@ -284,9 +284,9 @@
 
           <div class="form-field">
             <div class="field-meta">
-              <label for="input-url">Source Link / Target URL <span class="opt">(Optional)</span></label>
+              <label for="input-url">Page / Link URL <span class="opt">(optional if text provided)</span></label>
             </div>
-            <input type="url" id="input-url" placeholder="https://suspicious-domain.com/login or short URL" spellcheck="false" autocomplete="off">
+            <input type="text" id="input-url" placeholder="https://suspicious-domain.com/login, domain, or short link" spellcheck="false" autocomplete="off">
             <div id="url-observations" class="url-observations" hidden></div>
           </div>
 
@@ -303,6 +303,190 @@
 
         <!-- Status / Feedback Box -->
         <div id="status-banner" class="status-banner" hidden role="alert"></div>
+      </section>
+
+      <!-- Feature B: Workflow Permission & Data Log Transparency Panel -->
+      <section class="glass-card feature-panel" id="workflow-panel">
+        <div class="feature-panel-header">
+          <div class="feature-title-group">
+            <span class="panel-icon">⚙️</span>
+            <div>
+              <h2 class="panel-title">Workflow Permission & Log Transparency</h2>
+              <p class="panel-subtitle">Pre-execution inspection of automation pipelines before granting OAuth permissions or turning on workflows</p>
+            </div>
+          </div>
+          <div class="preset-group">
+            <span class="preset-label">Example Flows:</span>
+            <button type="button" class="btn-preset" id="btn-wf-preset-sheets" title="Load Make.com + Sheets + Webhook preset">
+              NoMalice Webhook Flow
+            </button>
+            <button type="button" class="btn-preset" id="btn-wf-preset-email" title="Load Email -> Cloud Drive -> Slack preset">
+              Email &bull; Drive &bull; Slack
+            </button>
+            <button type="button" class="btn-preset" id="btn-wf-preset-crm" title="Load CRM Lead -> Stripe -> Discord preset">
+              CRM &bull; Stripe &bull; Discord
+            </button>
+          </div>
+        </div>
+
+        <div class="feature-form">
+          <div class="form-field">
+            <label for="wf-apps-input">Connected Apps & Services in Pipeline</label>
+            <input type="text" id="wf-apps-input" placeholder="e.g. Gmail, Google Drive, Slack, Webhook, Google Sheets, Stripe, Notion" value="Webhook, Make.com Engine, Google Sheets">
+          </div>
+          <div class="form-field">
+            <label for="wf-trigger-input">Trigger Event & Data Flow Description</label>
+            <textarea id="wf-trigger-input" rows="3" placeholder="Describe the trigger and what data flows between services...">When a threat scan is submitted via incoming Webhook (containing URL/text), process threat signals and append the assessment record to a Google Spreadsheet.</textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-inspect-workflow" class="btn-primary">
+              <span class="btn-icon">🔍</span>
+              <span>Inspect Workflow Transparency</span>
+            </button>
+            <button type="button" id="btn-clear-workflow" class="btn-ghost">Reset Flow</button>
+          </div>
+        </div>
+
+        <!-- Workflow Transparency 3-Stage Output -->
+        <div id="workflow-output" class="workflow-transparency-card" hidden>
+          <div class="workflow-header-row">
+            <span class="report-chip">AUTOMATION TRANSPARENCY AUDIT</span>
+            <span class="workflow-score-badge" id="wf-badge">Audited</span>
+          </div>
+
+          <div class="stages-timeline">
+            <!-- Stage 1: Before Run -->
+            <div class="timeline-stage stage-before">
+              <div class="stage-marker">
+                <span class="stage-step">1</span>
+                <span class="stage-phase">BEFORE RUN</span>
+              </div>
+              <div class="stage-card">
+                <div class="stage-title-row">
+                  <span class="stage-icon">🔑</span>
+                  <h4>OAuth Permissions & Initial Scopes Requested</h4>
+                </div>
+                <div class="stage-content" id="wf-before-content"></div>
+                <div class="stage-note">
+                  <strong>Important:</strong> Adding any new app/connector to this workflow at a later time requires an explicit re-authorization prompt with new scoped permissions.
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 2: During Run -->
+            <div class="timeline-stage stage-during">
+              <div class="stage-marker">
+                <span class="stage-step">2</span>
+                <span class="stage-phase">DURING RUN</span>
+              </div>
+              <div class="stage-card">
+                <div class="stage-title-row">
+                  <span class="stage-icon">⚡</span>
+                  <h4>Background Execution & Silent Token Usage</h4>
+                </div>
+                <div class="stage-content" id="wf-during-content"></div>
+                <div class="stage-note">
+                  <strong>Security Architecture:</strong> Workflows execute autonomously in the background using pre-granted OAuth access tokens. <em>No interactive permission popups occur mid-run</em>, so all security controls must be verified beforehand.
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 3: After Run -->
+            <div class="timeline-stage stage-after">
+              <div class="stage-marker">
+                <span class="stage-step">3</span>
+                <span class="stage-phase">AFTER RUN</span>
+              </div>
+              <div class="stage-card">
+                <div class="stage-title-row">
+                  <span class="stage-icon">📋</span>
+                  <h4>Execution Run History, Data Logs & PII Exposure</h4>
+                </div>
+                <div class="stage-content" id="wf-after-content"></div>
+                <div class="stage-note">
+                  <strong>Access Management:</strong> You can revoke pipeline access at any time in the respective app's security settings (e.g. Google Account Third-Party Access, Slack App Management).
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Feature A: Static Command Explainer Panel -->
+      <section class="glass-card feature-panel" id="command-explainer-panel">
+        <div class="feature-panel-header">
+          <div class="feature-title-group">
+            <span class="panel-icon">💻</span>
+            <div>
+              <h2 class="panel-title">Static Command Explainer</h2>
+              <p class="panel-subtitle">NoMalice-style static inspection of shell and terminal commands &mdash; strictly inspects syntax, permissions, and network vectors without executing anything</p>
+            </div>
+          </div>
+          <div class="preset-group">
+            <span class="preset-label">Test Commands:</span>
+            <button type="button" class="btn-preset" id="btn-cmd-preset-curl" title="Load pipe-to-sudo-bash dangerous command">
+              Piped Remote Script
+            </button>
+            <button type="button" class="btn-preset" id="btn-cmd-preset-npm" title="Load npm install command">
+              NPM Install & Flags
+            </button>
+            <button type="button" class="btn-preset" id="btn-cmd-preset-powershell" title="Load PowerShell WebRequest command">
+              PowerShell Download
+            </button>
+          </div>
+        </div>
+
+        <div class="feature-form">
+          <div class="form-field">
+            <label for="cmd-input">Terminal / Shell Command to Inspect</label>
+            <div class="input-wrapper">
+              <textarea id="cmd-input" rows="3" placeholder="e.g. curl -fsSL https://get.docker.com | sudo sh, npm i -g nodemon, or chmod +x script.sh"></textarea>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-explain-command" class="btn-primary">
+              <span class="btn-icon">⚡</span>
+              <span>Explain Command Safely</span>
+            </button>
+            <button type="button" id="btn-clear-command" class="btn-ghost">Clear Command</button>
+          </div>
+        </div>
+
+        <!-- Command Explanation Output -->
+        <div id="cmd-output" class="command-explanation-card" hidden>
+          <div class="cmd-output-header">
+            <span class="report-chip">STATIC CLI AUDIT (NON-EXECUTING)</span>
+            <div class="cmd-risk-indicator" id="cmd-risk-indicator">
+              <span class="risk-indicator-dot"></span>
+              <span id="cmd-risk-label">Low Risk</span>
+            </div>
+          </div>
+
+          <!-- Uninspectable / Blind-Spot Alert Banner -->
+          <div id="cmd-blindspot-alert" class="cmd-alert-box alert-blindspot" hidden>
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-body">
+              <strong>Uninspectable Blind-Spot Detected:</strong>
+              <p id="cmd-blindspot-text">This command downloads and pipes a remote payload directly into a shell interpreter at runtime. The contents of remote code cannot be verified beforehand and may change without warning.</p>
+            </div>
+          </div>
+
+          <!-- Risk & Permission Warnings -->
+          <div id="cmd-warnings-container" class="cmd-warnings-box" hidden>
+            <h3 class="cmd-section-title">
+              <span class="block-icon">🚨</span> Risk & Permission Flags
+            </h3>
+            <ul id="cmd-warnings-list" class="cmd-warnings-list"></ul>
+          </div>
+
+          <!-- Step-by-Step Breakdown -->
+          <div class="cmd-breakdown-box">
+            <h3 class="cmd-section-title">
+              <span class="block-icon">🔍</span> Step-by-Step Command Breakdown
+            </h3>
+            <div id="cmd-steps-list" class="cmd-steps-list"></div>
+          </div>
+        </div>
       </section>
 
       <!-- Threat Report Card -->
