@@ -35,6 +35,8 @@ const btnClear = document.getElementById("btn-clear");
 const loaderSpinner = document.getElementById("loader-spinner");
 const scanLaser = document.getElementById("scan-laser");
 const statusBanner = document.getElementById("status-banner");
+const urlObservations = document.getElementById("url-observations");
+
 
 // Sample Preset Buttons
 const btnSampleHigh = document.getElementById("btn-sample-high");
@@ -415,29 +417,74 @@ async function handleAnalyze(e) {
   if (e) e.preventDefault();
 
   const text = inputText.value.trim();
-  const url = inputUrl.value.trim();
+  const urlRaw = inputUrl.value.trim();
 
-  if (!text) {
-    showStatus("Please paste or enter the content to scan before analyzing.", "error");
+  // Require at least one of text or URL
+  if (!text && !urlRaw) {
+    showStatus("Please provide either the suspicious content or a URL to scan.", "error");
     inputText.focus();
     return;
+  }
+
+  // Normalize and validate URL if provided
+  let normalizedUrl = "";
+  if (urlRaw) {
+    normalizedUrl = normalizeUrl(urlRaw);
+    if (!normalizedUrl) {
+      showStatus("The URL provided appears invalid. Please enter a proper URL.", "error");
+      inputUrl.focus();
+      return;
+    }
+    // Update field with normalized URL
+    inputUrl.value = normalizedUrl;
+    renderUrlObservations(normalizedUrl);
+  } else {
+    clearUrlObservations();
   }
 
   hideStatus();
   reportPanel.hidden = true;
   setLoading(true);
 
+  // Determine scan mode and payload
+  const scanMode = normalizedUrl && text ? "combined" : normalizedUrl ? "url_only" : "text_only";
+  const payload = {
+    source: "WebApp",
+    url: normalizedUrl,
+    text: text,
+    scan_type: scanMode,
+    prompt: scanMode === "url_only" ? `Analyze this URL for phishing, scam, or malware risk: ${normalizedUrl}` : undefined
+  };
+
   try {
     const response = await fetch(WEBHOOK_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        source: "WebApp",
-        url: url,
-        text: text
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned HTTP ${response.status} (${response.statusText})`);
+    }
+
+    const rawResponseText = await response.text();
+    let parsedData;
+    try {
+      parsedData = cleanAndParseJSON(rawResponseText);
+    } catch (parseErr) {
+      console.error("JSON Parse failure:", rawResponseText, parseErr);
+      throw new Error(`Received unexpected non-JSON response from server: ${rawResponseText.slice(0, 140)}...`);
+    }
+
+    hideStatus();
+    renderResults(parsedData, true);
+    saveRecentScan(text, normalizedUrl, parsedData);
+  } catch (err) {
+    console.error("Analysis error:", err);
+    showStatus(`Threat analysis failed: ${err.message}`, "error");
+  } finally {
+    setLoading(false);
+  }
     });
 
     if (!response.ok) {

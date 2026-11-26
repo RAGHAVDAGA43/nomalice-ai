@@ -274,7 +274,7 @@
               <div class="char-counter" id="char-counter">0 characters</div>
             </div>
             <div class="input-wrapper">
-              <textarea id="input-text" rows="7" placeholder="Paste suspicious email, SMS, crypto DM, banking warning, invoice, or webpage text here... (Ctrl+Enter or Cmd+Enter to analyze)" required></textarea>
+              <textarea id="input-text" rows="7" placeholder="Paste suspicious email, SMS, crypto DM, banking warning, invoice, or webpage text here... (Ctrl+Enter or Cmd+Enter to analyze)" ></textarea>
               <div class="scan-laser" id="scan-laser" hidden></div>
             </div>
             <div class="shortcut-tip">
@@ -287,6 +287,7 @@
               <label for="input-url">Source Link / Target URL <span class="opt">(Optional)</span></label>
             </div>
             <input type="url" id="input-url" placeholder="https://suspicious-domain.com/login or short URL" spellcheck="false" autocomplete="off">
+            <div id="url-observations" class="url-observations" hidden></div>
           </div>
 
           <div class="form-actions">
