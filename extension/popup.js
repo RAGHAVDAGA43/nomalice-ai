@@ -224,202 +224,6 @@ function runScriptInTab(tabId, funcToRun) {
   });
 }
 
-function normalizeUrl(raw) {
-  let url = String(raw || "").trim();
-  if (!url) return "";
-  if (!/^https?:\/\//i.test(url)) {
-    url = "https://" + url;
-  }
-  try {
-    const u = new URL(url);
-    return u.href;
-  } catch (_) {
-    return "";
-  }
-}
-
-// ==========================================================================
-// Feature Toggles & Tab Navigation in Extension
-// ==========================================================================
-const btnToggleSettings = document.getElementById("btn-toggle-settings");
-const settingsCard = document.getElementById("settings-card");
-const toggleCmdExplainer = document.getElementById("toggle-cmd-explainer");
-const toggleWfTransparency = document.getElementById("toggle-wf-transparency");
-
-const tabThreat = document.getElementById("tab-threat");
-const tabCommand = document.getElementById("tab-command");
-const tabWorkflow = document.getElementById("tab-workflow");
-const viewThreat = document.getElementById("view-threat");
-const viewCommand = document.getElementById("view-command");
-const viewWorkflow = document.getElementById("view-workflow");
-
-const cmdDisabledMsg = document.getElementById("cmd-disabled-msg");
-const cmdViewContent = document.getElementById("cmd-view-content");
-const wfDisabledMsg = document.getElementById("wf-disabled-msg");
-const wfViewContent = document.getElementById("wf-view-content");
-
-// Command Explainer Elements in Extension
-const extCmdInput = document.getElementById("ext-cmd-input");
-const btnExtExplain = document.getElementById("btn-ext-explain");
-const btnExtCmdSample = document.getElementById("btn-ext-cmd-sample");
-const extCmdResults = document.getElementById("ext-cmd-results");
-const extCmdRisk = document.getElementById("ext-cmd-risk");
-const extCmdBlindspot = document.getElementById("ext-cmd-blindspot");
-const extCmdWarnings = document.getElementById("ext-cmd-warnings");
-const extCmdSteps = document.getElementById("ext-cmd-steps");
-
-// Workflow Transparency Elements in Extension
-const extWfApps = document.getElementById("ext-wf-apps");
-const btnExtAuditWf = document.getElementById("btn-ext-audit-wf");
-const btnExtWfSample = document.getElementById("btn-ext-wf-sample");
-const extWfResults = document.getElementById("ext-wf-results");
-const extWfBeforeList = document.getElementById("ext-wf-before-list");
-
-function switchTab(viewId) {
-  [tabThreat, tabCommand, tabWorkflow].forEach(btn => {
-    if (btn) btn.classList.toggle("active", btn.dataset.target === viewId);
-  });
-  [viewThreat, viewCommand, viewWorkflow].forEach(view => {
-    if (view) view.hidden = view.id !== viewId;
-  });
-}
-
-function updateFeatureToggleUI() {
-  const isCmdEnabled = toggleCmdExplainer.checked;
-  const isWfEnabled = toggleWfTransparency.checked;
-
-  if (cmdDisabledMsg) cmdDisabledMsg.hidden = isCmdEnabled;
-  if (cmdViewContent) cmdViewContent.hidden = !isCmdEnabled;
-
-  if (wfDisabledMsg) wfDisabledMsg.hidden = isWfEnabled;
-  if (wfViewContent) wfViewContent.hidden = !isWfEnabled;
-
-  // Persist to storage
-  if (extApi && extApi.storage && extApi.storage.local) {
-    extApi.storage.local.set({
-      enableCommandExplainer: isCmdEnabled,
-      enableWorkflowTransparency: isWfEnabled
-    });
-  }
-
-  // Notify background script about context menu status
-  if (extApi && extApi.runtime && extApi.runtime.sendMessage) {
-    try {
-      extApi.runtime.sendMessage({
-        type: "TOGGLE_COMMAND_EXPLAINER",
-        enabled: isCmdEnabled
-      });
-    } catch (_) {}
-  }
-}
-
-function loadSavedSettings() {
-  if (extApi && extApi.storage && extApi.storage.local) {
-    extApi.storage.local.get({
-      enableCommandExplainer: true,
-      enableWorkflowTransparency: true,
-      pendingInspectCommand: ""
-    }, (items) => {
-      toggleCmdExplainer.checked = items.enableCommandExplainer !== false;
-      toggleWfTransparency.checked = items.enableWorkflowTransparency !== false;
-      updateFeatureToggleUI();
-
-      // If user selected text via context menu before opening popup
-      if (items.pendingInspectCommand) {
-        switchTab("view-command");
-        extCmdInput.value = items.pendingInspectCommand;
-        handleExtExplainCommand();
-        extApi.storage.local.remove("pendingInspectCommand");
-      }
-    });
-  } else {
-    updateFeatureToggleUI();
-  }
-}
-
-// Extension Command Explainer Logic
-function handleExtExplainCommand() {
-  const cmd = (extCmdInput.value || "").trim();
-  if (!cmd) return;
-
-  extCmdResults.hidden = false;
-
-  let hasBlindspot = false;
-  let risk = "Safe";
-  const warnings = [];
-
-  if (/\|\s*(?:sudo\s+)?(?:sh|bash|zsh|powershell|cmd)\b/i.test(cmd)) {
-    hasBlindspot = true;
-    risk = "High Risk";
-    warnings.push("Remote script piped directly into interpreter at runtime (uninspectable blind-spot).");
-  }
-
-  if (/\b(?:sudo|doas|runas)\b/i.test(cmd)) {
-    risk = "High Risk";
-    warnings.push("Requests root or superuser system privileges.");
-  }
-
-  if (/\b(?:curl|wget|Invoke-WebRequest|iwr)\b/i.test(cmd)) {
-    if (risk === "Safe") risk = "Suspicious";
-    warnings.push("Downloads external resources from network.");
-  }
-
-  if (/\b(?:rm\s+-rf|chmod\s+\+x|chmod\s+777)\b/i.test(cmd)) {
-    if (risk === "Safe") risk = "Suspicious";
-    warnings.push("Modifies file permissions or destroys directory tree.");
-  }
-
-  extCmdBlindspot.hidden = !hasBlindspot;
-  extCmdRisk.textContent = risk;
-  extCmdRisk.className = `risk-pill ${risk === 'High Risk' ? 'risk-high-risk' : risk === 'Suspicious' ? 'risk-suspicious' : 'risk-safe'}`;
-
-  if (warnings.length > 0) {
-    extCmdWarnings.hidden = false;
-    extCmdWarnings.innerHTML = warnings.map(w => `<div class="ext-warning-chip">⚠️ ${w}</div>`).join('');
-  } else {
-    extCmdWarnings.hidden = true;
-  }
-
-  const parts = cmd.split(/(\|{1,2}|&&|;)/).map(s => s.trim()).filter(Boolean);
-  extCmdSteps.innerHTML = parts.map((part, i) => {
-    let desc = `Runs: <code>${part}</code>`;
-    if (part.startsWith("curl") || part.startsWith("wget")) desc = "Fetches remote payload via network.";
-    if (part === "sudo sh" || part === "sh" || part === "bash") desc = "Executes piped stream in shell interpreter.";
-    if (part.startsWith("npm")) desc = "Node.js package manager operation.";
-    return `
-      <div class="ext-step-item">
-        <div class="ext-step-item-title">Step ${i + 1}</div>
-        <div class="ext-step-item-desc">${desc}</div>
-      </div>
-    `;
-  }).join('');
-}
-
-// Extension Workflow Transparency Logic
-function handleExtAuditWorkflow() {
-  const appsStr = (extWfApps.value || "").trim();
-  if (!appsStr) return;
-
-  extWfResults.hidden = false;
-  const apps = appsStr.split(/[,+&]/).map(a => a.trim()).filter(Boolean);
-
-  let listHtml = "";
-  apps.forEach(app => {
-    const a = app.toLowerCase();
-    let level = "Medium";
-    if (a.includes("gmail") || a.includes("stripe")) level = "High";
-    if (a.includes("slack") || a.includes("discord")) level = "Low";
-
-    listHtml += `
-      <div class="ext-wf-scope-row">
-        <span>${app}</span>
-        <span class="ext-wf-scope-level ${level}">${level} Risk</span>
-      </div>
-    `;
-  });
-  extWfBeforeList.innerHTML = listHtml;
-}
-
 async function initializePopup() {
   updateCharCount();
   scanTextInput.addEventListener("input", updateCharCount);
@@ -428,43 +232,6 @@ async function initializePopup() {
   btnSourcePage.addEventListener("click", () => setSource("page"));
 
   btnScan.addEventListener("click", handleScan);
-
-  // Settings & Toggles
-  if (btnToggleSettings) {
-    btnToggleSettings.addEventListener("click", () => {
-      settingsCard.hidden = !settingsCard.hidden;
-    });
-  }
-
-  if (toggleCmdExplainer) toggleCmdExplainer.addEventListener("change", updateFeatureToggleUI);
-  if (toggleWfTransparency) toggleWfTransparency.addEventListener("change", updateFeatureToggleUI);
-
-  // Tabs
-  [tabThreat, tabCommand, tabWorkflow].forEach(btn => {
-    if (btn) {
-      btn.addEventListener("click", () => switchTab(btn.dataset.target));
-    }
-  });
-
-  // CLI Explainer
-  if (btnExtExplain) btnExtExplain.addEventListener("click", handleExtExplainCommand);
-  if (btnExtCmdSample) {
-    btnExtCmdSample.addEventListener("click", () => {
-      extCmdInput.value = "curl -fsSL https://get.docker.com | sudo sh";
-      handleExtExplainCommand();
-    });
-  }
-
-  // Workflow
-  if (btnExtAuditWf) btnExtAuditWf.addEventListener("click", handleExtAuditWorkflow);
-  if (btnExtWfSample) {
-    btnExtWfSample.addEventListener("click", () => {
-      extWfApps.value = "Gmail, Google Drive, Slack, Webhook";
-      handleExtAuditWorkflow();
-    });
-  }
-
-  loadSavedSettings();
 
   try {
     const tabs = await queryActiveTab();
@@ -489,7 +256,7 @@ async function initializePopup() {
       u.startsWith("moz-extension://") ||
       u.startsWith("opera://")
     ) {
-      showStatus("Internal browser page detected. Paste URL or text manually to scan.", "info");
+      showStatus("Internal browser page detected. Paste text manually to scan.", "info");
       return;
     }
 
@@ -505,11 +272,63 @@ async function initializePopup() {
         setSource("selection");
       } else if (capturedPageText) {
         setSource("page");
+      } else {
+        showStatus("No text detected on page. Paste text directly to scan.", "info");
       }
     }
   } catch (err) {
     console.warn("Script execution warning:", err);
-    showStatus("Could not automatically inspect tab. You can paste URL or text manually.", "info");
+    showStatus("Could not automatically inspect tab. You can paste text manually.", "info");
+  }
+}
+
+async function handleScan() {
+  const textToScan = scanTextInput.value.trim();
+  const urlToScan = urlInput.value.trim();
+
+  if (!textToScan) {
+    showStatus("Please enter or select some text before scanning.", "error");
+    return;
+  }
+
+  hideStatus();
+  resultsCard.hidden = true;
+  setLoading(true);
+
+  try {
+    const response = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        source: "Extension",
+        url: urlToScan,
+        text: textToScan
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const rawResponseText = await response.text();
+    let parsedData;
+
+    try {
+      parsedData = cleanAndParseJSON(rawResponseText);
+    } catch (parseErr) {
+      console.error("JSON parse failure on response:", rawResponseText, parseErr);
+      throw new Error(`Failed to parse response as JSON. Raw output: ${rawResponseText.slice(0, 150)}...`);
+    }
+
+    hideStatus();
+    renderResults(parsedData);
+  } catch (err) {
+    console.error("Scan error:", err);
+    showStatus(`Scan failed: ${err.message}`, "error");
+  } finally {
+    setLoading(false);
   }
 }
 
