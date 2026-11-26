@@ -79,26 +79,44 @@
 
       <!-- Tab 1: Chrome / Edge / Brave -->
       <div class="guide-tab-content active" id="tab-content-chromium">
+        <div class="browser-url-callout">
+          <div class="callout-icon">🧭</div>
+          <div class="callout-body">
+            <div class="callout-title-row">
+              <span class="callout-title">Direct Extension Management URL:</span>
+              <div class="callout-url-chip">
+                <code id="chrome-ext-url">chrome://extensions</code>
+                <button type="button" class="btn-copy-chip" id="btn-copy-chrome-url" title="Copy chrome://extensions to clipboard">
+                  <span class="chip-copy-icon">📋</span> Copy URL
+                </button>
+              </div>
+            </div>
+            <p class="callout-note">
+              <strong>Note:</strong> Browsers intentionally restrict web pages from launching <code>chrome://</code> URLs directly for security. Please <strong>copy and paste</strong> <code>chrome://extensions</code> (or <code>edge://extensions</code> in Microsoft Edge, <code>brave://extensions</code> in Brave) into your browser address bar.
+            </p>
+          </div>
+        </div>
+
         <div class="guide-steps-grid">
           <div class="guide-step-card">
             <div class="step-num">01</div>
             <div class="step-info">
               <strong>Extract Extension ZIP</strong>
-              <p>Download <code>nomalice-extension-browser.zip</code> and extract to a local folder.</p>
+              <p>Download <code>nomalice-extension-browser.zip</code> and extract to a local folder, or use the <code>extension/</code> folder directly from the repository.</p>
             </div>
           </div>
           <div class="guide-step-card">
             <div class="step-num">02</div>
             <div class="step-info">
-              <strong>Enable Developer Mode</strong>
-              <p>Navigate to <code>chrome://extensions</code> or <code>edge://extensions</code> and switch on <strong>Developer mode</strong>.</p>
+              <strong>Open Extensions & Enable Developer Mode</strong>
+              <p>Paste <code>chrome://extensions</code> into your address bar and switch on the <strong>Developer mode</strong> toggle switch at the top right.</p>
             </div>
           </div>
           <div class="guide-step-card">
             <div class="step-num">03</div>
             <div class="step-info">
               <strong>Load Unpacked</strong>
-              <p>Click <strong>Load unpacked</strong> and select the extracted extension folder.</p>
+              <p>Click the <strong>Load unpacked</strong> button and select the extracted extension folder (the directory containing <code>manifest.json</code>).</p>
             </div>
           </div>
         </div>
@@ -106,26 +124,50 @@
 
       <!-- Tab 2: Firefox -->
       <div class="guide-tab-content" id="tab-content-firefox">
+        <div class="browser-url-callout">
+          <div class="callout-icon">🦊</div>
+          <div class="callout-body">
+            <div class="callout-title-row">
+              <span class="callout-title">Firefox Add-ons & Debugging URLs:</span>
+              <div class="callout-url-chip">
+                <code>about:debugging</code>
+                <button type="button" class="btn-copy-chip" id="btn-copy-firefox-debug" title="Copy about:debugging to clipboard">
+                  <span class="chip-copy-icon">📋</span> Copy
+                </button>
+              </div>
+              <div class="callout-url-chip">
+                <code>about:addons</code>
+                <button type="button" class="btn-copy-chip" id="btn-copy-firefox-addons" title="Copy about:addons to clipboard">
+                  <span class="chip-copy-icon">📋</span> Copy
+                </button>
+              </div>
+            </div>
+            <p class="callout-note">
+              <strong>Note:</strong> Like Chromium, Firefox prevents web pages from opening internal <code>about:</code> URLs. Copy and paste <code>about:debugging</code> into your address bar.
+            </p>
+          </div>
+        </div>
+
         <div class="guide-steps-grid">
           <div class="guide-step-card">
             <div class="step-num">01</div>
             <div class="step-info">
               <strong>Extract Extension ZIP</strong>
-              <p>Download <code>nomalice-extension-browser.zip</code> and unpack it to any folder.</p>
+              <p>Download <code>nomalice-extension-browser.zip</code> and unpack it to any folder, or use the local <code>extension/</code> folder.</p>
             </div>
           </div>
           <div class="guide-step-card">
             <div class="step-num">02</div>
             <div class="step-info">
               <strong>Open Debugging Page</strong>
-              <p>In Firefox, enter <code>about:debugging</code> in the address bar and click <strong>This Firefox</strong>.</p>
+              <p>Paste <code>about:debugging</code> in the address bar and click <strong>This Firefox</strong> on the left panel.</p>
             </div>
           </div>
           <div class="guide-step-card">
             <div class="step-num">03</div>
             <div class="step-info">
               <strong>Load Temporary Add-on</strong>
-              <p>Click <strong>Load Temporary Add-on...</strong> and choose <code>manifest.json</code> from the extracted folder.</p>
+              <p>Click <strong>Load Temporary Add-on...</strong> and choose <code>manifest.json</code> from the extension folder.</p>
             </div>
           </div>
         </div>
@@ -187,6 +229,45 @@
         </div>
 
         <form id="threat-form" novalidate>
+          <!-- Screenshot / Photo OCR Upload Area -->
+          <div class="ocr-section-container">
+            <div class="ocr-dropzone" id="ocr-dropzone" tabindex="0" role="region" aria-label="Image text extraction dropzone">
+              <input type="file" id="ocr-file-input" accept="image/png, image/jpeg, image/webp" hidden>
+              <div class="ocr-drop-content" id="ocr-drop-content">
+                <div class="ocr-icon-wrapper">
+                  <span class="ocr-icon">📸</span>
+                </div>
+                <div class="ocr-prompt-text">
+                  <span class="ocr-prompt-main">
+                    <strong>Drop screenshot or photo</strong>, <button type="button" class="btn-link-action" id="btn-browse-image">browse file</button>, or press <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>Cmd</kbd>+<kbd>V</kbd> to paste
+                  </span>
+                  <span class="ocr-prompt-sub">Supports PNG, JPG, WEBP &bull; Neural Optical Character Recognition (Tesseract.js)</span>
+                </div>
+              </div>
+
+              <!-- OCR Preview & Live Progress Indicator -->
+              <div class="ocr-preview-bar" id="ocr-preview-bar" hidden>
+                <div class="ocr-thumb-container">
+                  <img id="ocr-thumbnail" alt="Screenshot preview thumbnail" src="">
+                </div>
+                <div class="ocr-status-details">
+                  <div class="ocr-status-header">
+                    <span class="ocr-status-filename" id="ocr-filename">screenshot.png</span>
+                    <span class="ocr-status-badge" id="ocr-badge">Processing</span>
+                  </div>
+                  <div class="ocr-progress-track">
+                    <div class="ocr-progress-fill" id="ocr-progress-fill" style="width: 0%;"></div>
+                  </div>
+                  <div class="ocr-status-msg" id="ocr-status-msg">Initializing Tesseract.js neural OCR engine...</div>
+                </div>
+                <div class="ocr-actions">
+                  <button type="button" class="btn-ocr-cancel" id="btn-ocr-cancel" title="Remove image">✕</button>
+                </div>
+              </div>
+            </div>
+            <div class="ocr-feedback-message" id="ocr-feedback-msg" hidden></div>
+          </div>
+
           <div class="form-field">
             <div class="field-meta">
               <label for="input-text">Suspicious Content / Message <span class="req">*</span></label>
@@ -329,6 +410,8 @@
     </footer>
   </div>
 
+  <!-- External CDN Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js" defer></script>
 </body>
 </html>

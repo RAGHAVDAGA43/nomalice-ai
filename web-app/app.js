@@ -72,6 +72,28 @@ const copyToast = document.getElementById("copy-toast");
 const rawJsonViewer = document.getElementById("raw-json-viewer");
 const rawJsonCode = document.getElementById("raw-json-code");
 
+// OCR Elements
+const ocrDropzone = document.getElementById("ocr-dropzone");
+const ocrFileInput = document.getElementById("ocr-file-input");
+const btnBrowseImage = document.getElementById("btn-browse-image");
+const ocrDropContent = document.getElementById("ocr-drop-content");
+const ocrPreviewBar = document.getElementById("ocr-preview-bar");
+const ocrThumbnail = document.getElementById("ocr-thumbnail");
+const ocrFilename = document.getElementById("ocr-filename");
+const ocrBadge = document.getElementById("ocr-badge");
+const ocrProgressFill = document.getElementById("ocr-progress-fill");
+const ocrStatusMsg = document.getElementById("ocr-status-msg");
+const btnOcrCancel = document.getElementById("btn-ocr-cancel");
+const ocrFeedbackMsg = document.getElementById("ocr-feedback-msg");
+
+// Browser URL Copy Buttons
+const btnCopyChromeUrl = document.getElementById("btn-copy-chrome-url");
+const btnCopyFirefoxDebug = document.getElementById("btn-copy-firefox-debug");
+const btnCopyFirefoxAddons = document.getElementById("btn-copy-firefox-addons");
+
+let activeOcrWorker = null;
+let currentImageObjectUrl = null;
+
 // Recent Scans History (LocalStorage)
 const historyPanel = document.getElementById("history-panel");
 const historyList = document.getElementById("history-list");
@@ -450,6 +472,7 @@ function handleClear() {
   hideStatus();
   reportPanel.hidden = true;
   currentReportData = null;
+  resetOcrUI();
   inputText.focus();
 }
 
@@ -464,9 +487,257 @@ function loadSample(sampleKey) {
   reportPanel.hidden = true;
 }
 
+// OCR & Image Processing Implementation with Tesseract.js
+function showOcrFeedback(msg, type = "info") {
+  if (!ocrFeedbackMsg) return;
+  ocrFeedbackMsg.textContent = msg;
+  ocrFeedbackMsg.className = `ocr-feedback-message ${type}`;
+  ocrFeedbackMsg.hidden = false;
+}
+
+function hideOcrFeedback() {
+  if (!ocrFeedbackMsg) return;
+  ocrFeedbackMsg.hidden = true;
+  ocrFeedbackMsg.textContent = "";
+}
+
+function resetOcrUI() {
+  if (currentImageObjectUrl) {
+    URL.revokeObjectURL(currentImageObjectUrl);
+    currentImageObjectUrl = null;
+  }
+  if (ocrThumbnail) ocrThumbnail.src = "";
+  if (ocrFileInput) ocrFileInput.value = "";
+  if (ocrPreviewBar) ocrPreviewBar.hidden = true;
+  if (ocrDropContent) ocrDropContent.hidden = false;
+  if (ocrProgressFill) ocrProgressFill.style.width = "0%";
+  if (ocrBadge) {
+    ocrBadge.textContent = "Processing";
+    ocrBadge.className = "ocr-status-badge";
+  }
+  hideOcrFeedback();
+}
+
+async function processImageFile(file) {
+  if (!file) return;
+
+  // Validate type
+  const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+  if (!validTypes.includes(file.type)) {
+    showOcrFeedback("Please upload a valid image file (PNG, JPG, or WEBP).", "error");
+    return;
+  }
+
+  // Check file size (e.g. limit to 25MB)
+  if (file.size > 25 * 1024 * 1024) {
+    showOcrFeedback("Image file is too large (max 25MB).", "error");
+    return;
+  }
+
+  hideOcrFeedback();
+
+  // Create preview
+  if (currentImageObjectUrl) {
+    URL.revokeObjectURL(currentImageObjectUrl);
+  }
+  currentImageObjectUrl = URL.createObjectURL(file);
+  ocrThumbnail.src = currentImageObjectUrl;
+  ocrFilename.textContent = file.name || "Pasted_Screenshot.png";
+
+  ocrDropContent.hidden = true;
+  ocrPreviewBar.hidden = false;
+  ocrBadge.textContent = "Extracting";
+  ocrBadge.className = "ocr-status-badge in-progress";
+  ocrProgressFill.style.width = "5%";
+  ocrStatusMsg.textContent = "Loading Tesseract.js OCR engine...";
+
+  // Check if Tesseract is available
+  if (typeof Tesseract === "undefined") {
+    ocrBadge.textContent = "Error";
+    ocrBadge.className = "ocr-status-badge error";
+    ocrStatusMsg.textContent = "OCR engine (Tesseract.js) failed to load from CDN.";
+    showOcrFeedback("Tesseract.js library is not available. Please check your internet connection or reload the page.", "error");
+    return;
+  }
+
+  try {
+    const result = await Tesseract.recognize(
+      file,
+      'eng',
+      {
+        logger: (m) => {
+          if (m.status && m.progress !== undefined) {
+            const pct = Math.round(m.progress * 100);
+            ocrProgressFill.style.width = `${pct}%`;
+            
+            let statusText = m.status;
+            if (m.status === "loading tesseract core") statusText = "Loading OCR core...";
+            else if (m.status === "initializing tesseract") statusText = "Initializing model...";
+            else if (m.status === "loading language traineddata") statusText = "Loading neural model weights...";
+            else if (m.status === "initializing api") statusText = "Preparing OCR pipeline...";
+            else if (m.status === "recognizing text") statusText = `Detecting & extracting text (${pct}%)...`;
+            
+            ocrStatusMsg.textContent = statusText;
+          }
+        }
+      }
+    );
+
+    const extractedText = (result && result.data && result.data.text) ? result.data.text.trim() : "";
+
+    if (!extractedText) {
+      ocrBadge.textContent = "No Text";
+      ocrBadge.className = "ocr-status-badge warning";
+      ocrStatusMsg.textContent = "OCR finished, but no readable text was detected.";
+      showOcrFeedback("No text could be extracted from this image. Please ensure the screenshot is sharp and legible, or paste the text directly.", "warning");
+    } else {
+      ocrBadge.textContent = "Extracted";
+      ocrBadge.className = "ocr-status-badge success";
+      ocrProgressFill.style.width = "100%";
+      ocrStatusMsg.textContent = `Successfully extracted ${extractedText.length} characters of text!`;
+
+      // Place detected text into the scan input box so the user can review/edit it before scanning
+      if (inputText.value.trim().length > 0) {
+        inputText.value = inputText.value + "\n\n" + extractedText;
+      } else {
+        inputText.value = extractedText;
+      }
+      updateCharCount();
+      showOcrFeedback("Detected text has been placed into the input box below. You can review or edit it before analyzing.", "success");
+      
+      // Auto-focus the input box
+      inputText.focus();
+    }
+  } catch (err) {
+    console.error("Tesseract OCR extraction error:", err);
+    ocrBadge.textContent = "Error";
+    ocrBadge.className = "ocr-status-badge error";
+    ocrStatusMsg.textContent = `Text extraction failed: ${err.message || "Unknown error"}`;
+    showOcrFeedback(`OCR failed: ${err.message || "Could not read text from image."}`, "error");
+  }
+}
+
+// Setup Drag, Drop, File Pick and Paste events
+function setupOcrHandlers() {
+  if (!ocrDropzone) return;
+
+  // Click on dropzone or browse button opens file picker
+  btnBrowseImage.addEventListener("click", (e) => {
+    e.stopPropagation();
+    ocrFileInput.click();
+  });
+
+  ocrDropzone.addEventListener("click", (e) => {
+    // Avoid triggering if clicking on cancel button or if preview is showing
+    if (e.target.closest("#btn-ocr-cancel") || !ocrPreviewBar.hidden) return;
+    ocrFileInput.click();
+  });
+
+  ocrFileInput.addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      processImageFile(file);
+    }
+  });
+
+  btnOcrCancel.addEventListener("click", (e) => {
+    e.stopPropagation();
+    resetOcrUI();
+  });
+
+  // Drag and Drop
+  ["dragenter", "dragover"].forEach((eventName) => {
+    ocrDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      ocrDropzone.classList.add("dragover");
+    });
+  });
+
+  ["dragleave", "dragend", "drop"].forEach((eventName) => {
+    ocrDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      ocrDropzone.classList.remove("dragover");
+    });
+  });
+
+  ocrDropzone.addEventListener("drop", (e) => {
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files.length > 0) {
+      processImageFile(dt.files[0]);
+    }
+  });
+
+  // Global Paste handler (Ctrl+V / Cmd+V anywhere on page or in dropzone)
+  window.addEventListener("paste", (e) => {
+    // If the user is currently typing in the input textarea and pasted plain text, allow default text paste
+    const clipboardData = e.clipboardData || window.clipboardData;
+    if (!clipboardData) return;
+
+    const items = clipboardData.items;
+    let imageItem = null;
+
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          imageItem = items[i];
+          break;
+        }
+      }
+    }
+
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) {
+        processImageFile(file);
+      }
+    }
+  });
+}
+
+// Setup copy buttons for browser extension URLs
+function setupBrowserUrlCopy() {
+  function copyTextToClipboard(text, btnElement, successMsg = "Copied!") {
+    navigator.clipboard.writeText(text).then(() => {
+      const origText = btnElement.innerHTML;
+      btnElement.innerHTML = `✓ ${successMsg}`;
+      btnElement.classList.add("copied");
+      setTimeout(() => {
+        btnElement.innerHTML = origText;
+        btnElement.classList.remove("copied");
+      }, 2500);
+    }).catch(err => {
+      console.warn("Failed to copy URL:", err);
+      showStatus(`Could not automatically copy: please manually copy "${text}"`, "info");
+    });
+  }
+
+  if (btnCopyChromeUrl) {
+    btnCopyChromeUrl.addEventListener("click", () => {
+      copyTextToClipboard("chrome://extensions", btnCopyChromeUrl);
+    });
+  }
+
+  if (btnCopyFirefoxDebug) {
+    btnCopyFirefoxDebug.addEventListener("click", () => {
+      copyTextToClipboard("about:debugging", btnCopyFirefoxDebug);
+    });
+  }
+
+  if (btnCopyFirefoxAddons) {
+    btnCopyFirefoxAddons.addEventListener("click", () => {
+      copyTextToClipboard("about:addons", btnCopyFirefoxAddons);
+    });
+  }
+}
+
 function initialize() {
   updateCharCount();
   setupGuideTabs();
+  setupBrowserUrlCopy();
+  setupOcrHandlers();
   renderRecentScans();
 
   inputText.addEventListener("input", updateCharCount);
