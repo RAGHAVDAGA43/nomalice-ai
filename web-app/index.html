@@ -11,9 +11,20 @@
   <div class="ambient-glow glow-cyan" aria-hidden="true"></div>
   <div class="ambient-glow glow-violet" aria-hidden="true"></div>
 
-  <!-- Fixed Full-Screen Growing Circuit-Board Background Layer -->
-  <div class="circuit-bg-layer" aria-hidden="true">
-    <canvas id="circuit-bg-canvas"></canvas>
+  <!-- Background Rotating Gear Emblem Layer -->
+  <div class="bg-gear-layer" aria-hidden="true">
+    <div class="gear-cluster">
+      <!-- Primary Gear -->
+      <svg class="gear-svg gear-primary" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 35a15 15 0 1 0 0 30 15 15 0 0 0 0-30zm0 10a5 5 0 1 1 0 10 5 5 0 0 1 0-10z" fill="currentColor"/>
+        <path d="M94 45.5l-6.8-1.2c-.5-2.2-1.3-4.2-2.3-6.1l4.4-5.3c1.1-1.3.9-3.2-.3-4.4l-5.6-5.6c-1.2-1.2-3.1-1.4-4.4-.3l-5.3 4.4c-1.9-1-3.9-1.8-6.1-2.3l-1.2-6.8c-.3-1.7-1.7-2.9-3.4-2.9h-8c-1.7 0-3.1 1.2-3.4 2.9l-1.2 6.8c-2.2.5-4.2 1.3-6.1 2.3l-5.3-4.4c-1.3-1.1-3.2-.9-4.4.3l-5.6 5.6c-1.2 1.2-1.4 3.1-.3 4.4l4.4 5.3c-1 1.9-1.8 3.9-2.3 6.1l-6.8 1.2C7.2 46.8 6 48.2 6 50v8c0 1.7 1.2 3.1 2.9 3.4l6.8 1.2c.5 2.2 1.3 4.2 2.3 6.1l-4.4 5.3c-1.1 1.3-.9 3.2.3 4.4l5.6 5.6c1.2 1.2 3.1 1.4 4.4.3l5.3-4.4c1.9 1 3.9 1.8 6.1 2.3l1.2 6.8c.3 1.7 1.7 2.9 3.4 2.9h8c1.7 0 3.1-1.2 3.4-2.9l1.2-6.8c2.2-.5 4.2-1.3 6.1-2.3l5.3 4.4c1.3 1.1 3.2.9 4.4-.3l5.6-5.6c1.2-1.2 1.4-3.1.3-4.4l-4.4-5.3c1-1.9 1.8-3.9 2.3-6.1l6.8-1.2c1.7-.3 2.9-1.7 2.9-3.4v-8c0-1.8-1.2-3.2-2.9-3.5zM50 72c-12.1 0-22-9.9-22-22s9.9-22 22-22 22 9.9 22 22-9.9 22-22 22z" fill="currentColor"/>
+      </svg>
+      <!-- Secondary Counter-Rotating Gear -->
+      <svg class="gear-svg gear-secondary" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 38a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm0 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" fill="currentColor"/>
+        <path d="M92 46l-6.2-1.1c-.5-2-1.2-3.9-2.1-5.6l4-4.8c1-1.2.8-2.9-.3-4l-5.1-5.1c-1.1-1.1-2.8-1.3-4-.3l-4.8 4c-1.7-.9-3.6-1.6-5.6-2.1l-1.1-6.2c-.3-1.5-1.5-2.6-3.1-2.6h-7.3c-1.5 0-2.8 1.1-3.1 2.6l-1.1 6.2c-2 .5-3.9 1.2-5.6 2.1l-4.8-4c-1.2-1-2.9-.8-4 .3l-5.1 5.1c-1.1 1.1-1.3 2.8-.3 4l4 4.8c-.9 1.7-1.6 3.6-2.1 5.6L8 46c-1.5.3-2.6 1.5-2.6 3.1v7.3c0 1.5 1.1 2.8 2.6 3.1l6.2 1.1c.5 2 1.2 3.9 2.1 5.6l-4 4.8c-1 1.2-.8 2.9.3 4l5.1 5.1c1.1 1.1 2.8 1.3 4 .3l4.8-4c1.7.9 3.6 1.6 5.6 2.1l1.1 6.2c.3 1.5 1.5 2.6 3.1 2.6h7.3c1.5 0 2.8-1.1 3.1-2.6l1.1-6.2c2-.5 3.9-1.2 5.6-2.1l4.8 4c1.2 1 2.9.8 4-.3l5.1-5.1c1.1-1.1 1.3-2.8.3-4l-4-4.8c.9-1.7 1.6-3.6 2.1-5.6l6.2-1.1c1.5-.3 2.6-1.5 2.6-3.1v-7.3c0-1.6-1.1-2.8-2.6-3.1zM50 68c-9.9 0-18-8.1-18-18s8.1-18 18-18 18 8.1 18 18-8.1 18-18 18z" fill="currentColor"/>
+      </svg>
+    </div>
   </div>
 
   <div class="app-layout">
@@ -402,7 +413,6 @@
 
   <!-- External CDN Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="circuit-bg.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

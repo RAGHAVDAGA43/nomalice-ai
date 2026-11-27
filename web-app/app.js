@@ -485,6 +485,31 @@ async function handleAnalyze(e) {
   } finally {
     setLoading(false);
   }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned HTTP ${response.status} (${response.statusText})`);
+    }
+
+    const rawResponseText = await response.text();
+    let parsedData;
+
+    try {
+      parsedData = cleanAndParseJSON(rawResponseText);
+    } catch (parseErr) {
+      console.error("JSON Parse failure:", rawResponseText, parseErr);
+      throw new Error(`Received unexpected non-JSON response from server: ${rawResponseText.slice(0, 140)}...`);
+    }
+
+    hideStatus();
+    renderResults(parsedData, true);
+    saveRecentScan(text, url, parsedData);
+  } catch (err) {
+    console.error("Analysis error:", err);
+    showStatus(`Threat analysis failed: ${err.message}`, "error");
+  } finally {
+    setLoading(false);
+  }
 }
 
 function handleClear() {
